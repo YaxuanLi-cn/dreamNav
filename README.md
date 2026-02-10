@@ -87,7 +87,7 @@ cd ..
 **Key Parameters:**
 - `--lr`: Backbone learning rate, default 1e-6
 - `--lr_regressor`: Regressor learning rate, default 5e-3
-- `--epochs`: Number of training epochs, default 2
+- `--epochs`: Number of training epochs, default 5
 - `--batch_size`: 256
 
 **Outputs:**
