@@ -11,8 +11,9 @@ dreamNav/
 │   ├── data_process.sh 
 │   └── University-Release.zip
 ├── step1/                  
-│   ├── SuperGlue/         
-│   └── step1.py           
+│   ├── SuperGlue/   
+│   ├── step1.py      
+│   └── run.sh           
 └── step2/                 
 ```
 
