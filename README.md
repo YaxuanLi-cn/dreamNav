@@ -34,7 +34,7 @@ pip install -r requirements.txt
 
 # Download pretrained models
 huggingface-cli download Ramos-Ramos/dino-resnet-50 --local-dir models/dino_resnet
-huggingface-cli download lllyasviel/ControlNet --local-dir models/controlnet
+huggingface-cli download Boese0601/MagicDance control_sd15_ini.ckpt --local-dir models/controlnet
 huggingface-cli download openai/clip-vit-large-patch14 --local-dir models/controlnet/clip-vit-large-patch14
 ```
 
@@ -57,7 +57,7 @@ bash data_process.sh
 
 This script downloads the dataset from HuggingFace and extracts train/test/tours data to the `pairUAV/` directory.
 
-## 3. Stage 1: Feature Matching & Prediction
+## 3. Stage 1: Coarse Estimation
 
 ### 3.1 Run SuperGlue Feature Matching
 
@@ -78,14 +78,14 @@ This generates matching results in `matches_data/`.
 
 ```bash
 cd step1
-bash train.sh
+bash run.sh
 cd ..
 ```
 
 **Key Parameters:**
 - `--lr`: Backbone learning rate, default 1e-6
 - `--lr_regressor`: Regressor learning rate, default 5e-3
-- `--epochs`: Number of training epochs, default 40
+- `--epochs`: Number of training epochs, default 2
 - `--batch_size`: 256
 
 **Outputs:**
