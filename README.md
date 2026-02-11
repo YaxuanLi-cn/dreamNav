@@ -1,7 +1,7 @@
 <h1 align="center">DreamNav</h1>
 
 <p align="center">
-  DreamNav is a drone vision-based navigation prediction system trained in two stages.
+  DreamNav is the official implementation of "Last-Meter Precision Navigation for UAVs: A Diffusion-Refined Aerial Visual Servoing Approach".
 </p>
 
 <p align="center">
