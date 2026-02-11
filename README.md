@@ -1,6 +1,27 @@
-# DreamNav
+<h1 align="center">DreamNav</h1>
 
-DreamNav is a drone vision-based navigation prediction system trained in two stages.
+<p align="center">
+  DreamNav is a drone vision-based navigation prediction system trained in two stages.
+</p>
+
+<p align="center">
+  <!-- Dataset -->
+  <a href="https://huggingface.co/datasets/YaxuanLi/pairUAV">
+    <img src="https://img.shields.io/badge/Dataset-HF%20Data-d8b04c?style=for-the-badge" alt="Dataset">
+  </a>
+
+  <!-- Paper -->
+  <a href="https://your-paper-link-here">
+    <img src="https://img.shields.io/badge/Paper-arXiv-d46a5a?style=for-the-badge" alt="Paper">
+  </a>
+
+  <!-- Email -->
+  <a href="yaxuanli.cn@gmail.com">
+    <img src="https://img.shields.io/badge/Email-yourname%40domain.com-6b6b6b?style=for-the-badge" alt="Email">
+  </a>
+</p>
+
+<hr />
 
 ## Project Structure
 
