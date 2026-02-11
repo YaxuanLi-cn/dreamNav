@@ -17,7 +17,7 @@
 
   <!-- Email -->
   <a href="yaxuanli.cn@gmail.com">
-    <img src="https://img.shields.io/badge/Email-yourname%40domain.com-6b6b6b?style=for-the-badge" alt="Email">
+    <img src="https://img.shields.io/badge/Email-YaxuanLi-6b6b6b?style=for-the-badge" alt="Email">
   </a>
 </p>
 
