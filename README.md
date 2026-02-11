@@ -1,8 +1,5 @@
 <h1 align="center">DreamNav</h1>
 
-<p align="center">
-  DreamNav is the official implementation of "Last-Meter Precision Navigation for UAVs: A Diffusion-Refined Aerial Visual Servoing Approach".
-</p>
 
 <p align="center">
   <!-- Dataset -->
