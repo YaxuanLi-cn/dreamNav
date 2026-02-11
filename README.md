@@ -1,4 +1,4 @@
-<h1 align="center">DreamNav</h1>
+<h1 align="center">Last-Meter Precision Navigation for UAVs</h1>
 
 
 <p align="center">
