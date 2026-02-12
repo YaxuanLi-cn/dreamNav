@@ -113,3 +113,59 @@ cd ..
 - `step1_seen.json`: Best prediction results (used in Stage 2)
 
 ---
+
+## Appendix: Baseline
+
+### A.1 DINOv3 (ViT-7B)
+
+This baseline extracts image embeddings using a pretrained [DINOv3-ViT-7B](https://huggingface.co/facebook/dinov3-vit7b16-pretrain-lvd1689m) model and trains a linear regressor to predict heading and range.
+
+#### A.1.1 Environment Setup
+
+```bash
+cd baseline/dinov3
+
+conda create -n dinov3 python=3.9
+conda activate dinov3
+
+# Install PyTorch with CUDA support
+pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu128
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+#### A.1.2 Download Pretrained Model
+
+Login to HuggingFace and download the DINOv3-ViT-7B checkpoint:
+
+```bash
+huggingface-cli login
+huggingface-cli download facebook/dinov3-vit7b16-pretrain-lvd1689m --local-dir ../../models/dinov3_7b
+```
+
+#### A.1.3 Extract Embeddings
+
+Extract DINOv3 embeddings for all tour images. The script reads images from `pairUAV/tours/` and saves `.pkl` embedding files to `baseline/dinov3/embedding/`:
+
+```bash
+python extract_embeddings.py
+```
+
+#### A.1.4 Train & Evaluate
+
+Train the linear regressor and evaluate on the test set:
+
+```bash
+bash run.sh
+```
+
+**Key Parameters (in `run.sh`):**
+- `--lr_regressor`: Regressor learning rate, default `1e-3`
+- `--epochs`: Number of training epochs, default `4`
+- `--warmup_epochs`: Warmup epochs, default `1`
+
+**Outputs:**
+- `test_results.log`: Per-epoch evaluation results (Range MAE, Heading MAE, Success Rate)
+
+---
