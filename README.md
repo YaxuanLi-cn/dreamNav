@@ -218,3 +218,57 @@ The training script launches parallel A3C threads, saves checkpoints to `checkpo
 - `logs/`: TensorBoard logs
 
 ---
+
+### A.3 Sample4Geo (ConvNeXt-Base)
+
+This baseline extracts image embeddings using a pretrained [Sample4Geo](https://github.com/Skyy93/Sample4Geo) ConvNeXt-Base model (trained on University-1652 training dataset) and trains a linear regressor to predict heading and range.
+
+#### A.3.1 Environment Setup
+
+```bash
+cd baseline/sample4geo
+
+conda create -n sample4geo python=3.9
+conda activate sample4geo
+
+# Install PyTorch with CUDA support
+pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu128
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+#### A.3.2 Download Pretrained Model
+
+Download the Sample4Geo pretrained weights from Google Drive:
+
+```bash
+gdown --fuzzy 'https://drive.google.com/file/d/1dZ9itDjS-h5KHc23OQb8oHqJ3KoSaPyS/view'
+unzip pretrained.zip
+rm -rf pretrained.zip
+```
+
+
+#### A.3.3 Extract Embeddings
+
+
+```bash
+python extract_embeddings.py
+```
+
+#### A.3.4 Train & Evaluate
+
+```bash
+bash run.sh
+cd ../../
+```
+
+**Key Parameters (in `run.sh`):**
+- `--lr_regressor`: Regressor learning rate, default `1e-3`
+- `--epochs`: Number of training epochs, default `10`
+- `--warmup_epochs`: Warmup epochs, default `1`
+
+**Outputs:**
+- `test_results.log`: Per-epoch evaluation results (Range MAE, Heading MAE, Success Rate)
+
+---

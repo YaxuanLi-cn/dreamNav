@@ -1,0 +1,11 @@
+timm
+scipy
+albumentations<2
+scikit-learn
+transformers
+pandas
+tqdm
+numpy==1.26.2
+opencv-python-headless
+opencv-python
+gdown
