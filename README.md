@@ -158,6 +158,8 @@ Train the linear regressor and evaluate on the test set:
 
 ```bash
 bash run.sh
+cd ../../
+
 ```
 
 **Key Parameters (in `run.sh`):**
@@ -167,5 +169,52 @@ bash run.sh
 
 **Outputs:**
 - `test_results.log`: Per-epoch evaluation results (Range MAE, Heading MAE, Success Rate)
+
+---
+
+### A.2 AI2-THOR 
+
+This baseline is adapted from an Asynchronous Advantage Actor-Critic visual navigation codebase originally designed for indoor scene navigation in AI2-THOR. 
+
+> **⚠ GPU Compatibility Note:**
+> This codebase depends on **TensorFlow 1.13.1**, which only supports **CUDA 10.0** and does **not** work with modern GPUs (e.g., RTX 30/40 series) that require CUDA 11+. All experiments for this baseline were conducted on an **NVIDIA GTX 1660 Ti**. If you do not have access to a compatible older GPU, consider running on CPU by setting `USE_GPU = False` in `constants.py`.
+
+#### A.2.1 Environment Setup
+
+```bash
+cd baseline/ai2thor
+
+conda create -n icra python=3.7
+conda activate icra
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install TensorFlow 1.x GPU (requires CUDA 10.0, incompatible with modern GPUs)
+pip install tensorflow-gpu==1.13.1
+
+# Fix protobuf compatibility
+pip install "protobuf<=3.20.3" --force-reinstall
+```
+
+#### A.2.2 Train & Evaluate
+
+```bash
+python train.py
+```
+
+The training script launches parallel A3C threads, saves checkpoints to `checkpoints/`, and automatically evaluates on the test set upon completion.
+
+**Key Parameters (in `constants.py`):**
+- `PARALLEL_SIZE`: Number of parallel training threads, default `20`
+- `INITIAL_ALPHA_LOW / HIGH`: Learning rate range for log-uniform sampling
+- `MAX_TIME_STEP`: Maximum training steps, default `10M`
+- `ENTROPY_BETA`: Entropy regularization coefficient, default `0.01`
+- `USE_GPU`: Set to `True` for GPU training, `False` for CPU
+
+**Outputs:**
+- `checkpoints/`: Model checkpoints saved periodically during training
+- `checkpoints/evaluation_log.txt`: Test results (Heading MAE, Range MAE, Success Rate)
+- `logs/`: TensorBoard logs
 
 ---
