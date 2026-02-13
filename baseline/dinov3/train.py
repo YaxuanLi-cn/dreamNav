@@ -19,6 +19,12 @@ norm_heading_max = 180.0
 norm_heading_min = -180.0
 
 
+def angle_loss_cos_sin(pred_xy, target_vec, beta=0.1):
+
+    loss = F.smooth_l1_loss(pred_xy, target_vec, beta=beta, reduction='mean')
+    return loss
+
+
 def get_scheduler(optimizer, warmup_epochs, total_epochs, step_size, gamma):
     def lr_lambda(current_epoch):
         if current_epoch < warmup_epochs:
@@ -70,9 +76,9 @@ class TourFrameDataset(Dataset):
             self.images.append(image_emb)
 
             theta_deg = float(data['heading_num']) 
-            
+            theta_rad = math.radians(theta_deg)
             self.label_heading.append(theta_deg)
-            norm_heading = (theta_deg - norm_heading_min) / (norm_heading_max - norm_heading_min)
+            norm_heading = [math.cos(theta_rad), math.sin(theta_rad)]
 
             self.label_norm_heading.append(norm_heading)
             
@@ -127,7 +133,7 @@ class OurModel(nn.Module):
     def __init__(self, pretrained=True):
         super(OurModel, self).__init__()
 
-        self.regressor = nn.Linear(8192, 2) 
+        self.regressor = nn.Linear(8192, 3) 
 
     def forward(self, images_a):
         
@@ -152,20 +158,21 @@ def validate(test_loader, model, device):
 
             output = model(image_a)
             pred_range = output[:,0] * (norm_range_max - norm_range_min) + norm_range_min
-            pred_heading = output[:,1] * (norm_heading_max - norm_heading_min) + norm_heading_min
+            pred_heading_vec = output[:,1:]
 
             # Range MAE
             all_range_errors.append(torch.abs(pred_range - label_range))
 
-            # Circular heading MAE: e.g. 359 vs 1 -> diff=2, not 358
-            heading_diff = torch.abs(pred_heading - label_heading)
-            heading_diff = heading_diff % 360.0
-            heading_diff = torch.min(heading_diff, 360.0 - heading_diff)
+            # Circular heading MAE via atan2 on cos/sin
+            cos_d = (pred_heading_vec * label_norm_heading).sum(dim=-1).clamp(-1.0, 1.0)
+            sin_d = pred_heading_vec[:, 0] * label_norm_heading[:, 1] - pred_heading_vec[:, 1] * label_norm_heading[:, 0]
+            delta_rad = torch.atan2(sin_d, cos_d)
+            heading_diff = torch.rad2deg(delta_rad).abs()
             all_heading_errors.append(heading_diff)
 
             # Success rate: Euclidean distance between destinations < 10m
             true_heading_rad = label_heading * math.pi / 180.0
-            pred_heading_rad = pred_heading * math.pi / 180.0
+            pred_heading_rad = torch.atan2(pred_heading_vec[:, 1], pred_heading_vec[:, 0])
             true_x = label_range * torch.cos(true_heading_rad)
             true_y = label_range * torch.sin(true_heading_rad)
             pred_x = pred_range * torch.cos(pred_heading_rad)
@@ -205,9 +212,9 @@ def train(train_loader, test_dataloader, model, criterion, optimizer, epoch, dev
 
         output = model(image_a)
         pred_range = output[:,0]
-        pred_heading = output[:,1]
+        pred_heading = output[:,1:]
 
-        now_heading_loss = F.smooth_l1_loss(pred_heading, label_norm_heading, beta=0.1, reduction='mean')
+        now_heading_loss = angle_loss_cos_sin(pred_heading, label_norm_heading)
         now_range_loss = F.smooth_l1_loss(pred_range, label_norm_range, beta=0.1, reduction='mean')
         
         loss = now_heading_loss + now_range_loss
