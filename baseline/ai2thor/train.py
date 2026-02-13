@@ -99,7 +99,7 @@ def evaluate_model(sess, global_network, test_dataset_path, scene_scopes, networ
     successes = []
     
     # Evaluate on all test samples
-    num_batches = min(test_loader.get_num_batches(), 50)  # Limit to 50 batches for speed
+    num_batches = test_loader.get_num_batches()
     
     for _ in tqdm(range(num_batches), desc='Evaluating', unit='batch',
                    bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'):
