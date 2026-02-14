@@ -372,7 +372,7 @@ class PairUAVDataConfig(DataConfigFactory):
     data_dir: str = "/root/dreamNav/pairUAV/train"
     tour_dir: str = "/root/dreamNav/pairUAV/tours"
     # Max samples to use for norm stats computation (None = all).
-    norm_stats_max_samples: int | None = 50_000
+    norm_stats_max_samples: int | None = None
 
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
@@ -386,9 +386,7 @@ class PairUAVDataConfig(DataConfigFactory):
             logging.info(f"Loaded cached norm stats from {norm_stats_path}")
         else:
             logging.info(f"Computing norm stats for '{data_dir_tag}' from JSON metadata (no image I/O)...")
-            norm_stats = pairuav_dataset.compute_pairuav_norm_stats(
-                self.data_dir, max_samples=self.norm_stats_max_samples
-            )
+            norm_stats = pairuav_dataset.compute_pairuav_norm_stats(self.data_dir)
             norm_stats_path.parent.mkdir(parents=True, exist_ok=True)
             _normalize.save(norm_stats_path.parent, norm_stats)
             logging.info(f"Saved norm stats to {norm_stats_path}")

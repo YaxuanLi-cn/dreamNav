@@ -89,7 +89,7 @@ class PairUAVDataset:
 
 
 def compute_pairuav_norm_stats(
-    data_dir: str, max_samples: int | None = None
+    data_dir: str,
 ) -> dict[str, NormStats]:
     """Compute normalization stats from raw JSON metadata only (no image loading).
 
@@ -119,10 +119,6 @@ def compute_pairuav_norm_stats(
             action_stats.update(np.array([[heading, range_val]], dtype=np.float32))
 
             count += 1
-            if max_samples is not None and count >= max_samples:
-                break
-        if max_samples is not None and count >= max_samples:
-            break
 
     logging.info(f"Computed norm stats from {count} samples")
     return {
