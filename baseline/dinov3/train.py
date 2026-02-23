@@ -5,11 +5,13 @@ import torch.nn as nn
 from torch.utils.data import Dataset
 from tqdm import tqdm
 import json
-import pickle
 import math
 import numpy as np
 import torch.nn.functional as F
 import logging
+from PIL import Image
+from transformers import AutoImageProcessor, AutoModel
+from peft import LoraConfig, get_peft_model
 
 from torch.utils.data import DataLoader
 
@@ -35,13 +37,15 @@ def get_scheduler(optimizer, warmup_epochs, total_epochs, step_size, gamma):
 
 
 class TourFrameDataset(Dataset):
-    def __init__(self, json_dir, embedding_dir):
+    def __init__(self, json_dir, tours_dir, processor):
         super().__init__()
         
-        self.embedding_dir = embedding_dir
+        self.tours_dir = tours_dir
+        self.processor = processor
         self.json_paths = [os.path.join(json_dir, g, f) for g in os.listdir(json_dir) for f in os.listdir(os.path.join(json_dir, g)) if f.endswith('.json')]
 
-        self.images = []
+        self.image_a_paths = []
+        self.image_b_paths = []
         self.label_heading = [] 
         self.label_norm_heading = []
         self.label_ranges = []
@@ -58,22 +62,15 @@ class TourFrameDataset(Dataset):
             with open(json_path, 'r') as f:
                 data = json.load(f)
 
-            image_emb_a = os.path.join(self.embedding_dir, data['image_a'].replace('.jpeg', '.pkl'))
-            image_emb_b = os.path.join(self.embedding_dir, data['image_b'].replace('.jpeg', '.pkl'))
+            image_a_path = os.path.join(self.tours_dir, data['image_a'])
+            image_b_path = os.path.join(self.tours_dir, data['image_b'])
 
-            with open(image_emb_a, "rb") as f:
-                image_a_emb = pickle.load(f)
-
-            with open(image_emb_b, "rb") as f:
-                image_b_emb = pickle.load(f)
-
-            image_a_emb = image_a_emb.squeeze(0).float()
-            image_b_emb = image_b_emb.squeeze(0).float()
-
-            image_emb = torch.cat((image_a_emb, image_b_emb), dim=0)
+            if not os.path.exists(image_a_path) or not os.path.exists(image_b_path):
+                continue
 
             self.all_json_path.append(json_path)
-            self.images.append(image_emb)
+            self.image_a_paths.append(image_a_path)
+            self.image_b_paths.append(image_b_path)
 
             theta_deg = float(data['heading_num']) 
             theta_rad = math.radians(theta_deg)
@@ -94,17 +91,25 @@ class TourFrameDataset(Dataset):
         self.label_norm_ranges = np.array(self.label_norm_ranges, dtype=np.float32)
 
     def __len__(self):
-        return len(self.images)
+        return len(self.image_a_paths)
 
     def __getitem__(self, idx):
-        image = self.images[idx]
+        image_a = Image.open(self.image_a_paths[idx]).convert("RGB")
+        image_b = Image.open(self.image_b_paths[idx]).convert("RGB")
+
+        inputs_a = self.processor(images=image_a, return_tensors="pt")
+        inputs_b = self.processor(images=image_b, return_tensors="pt")
+
+        pixel_values_a = inputs_a["pixel_values"].squeeze(0)
+        pixel_values_b = inputs_b["pixel_values"].squeeze(0)
+
         label_heading = torch.tensor(self.label_heading[idx], dtype=torch.float32) 
         label_norm_heading = torch.tensor(self.label_norm_heading[idx], dtype=torch.float32)
         label_range = torch.tensor(self.label_ranges[idx], dtype=torch.float32) 
         label_norm_range = torch.tensor(self.label_norm_ranges[idx], dtype=torch.float32) 
 
         json_path = self.all_json_path[idx]
-        return image, label_heading, label_norm_heading, json_path, label_range, label_norm_range
+        return pixel_values_a, pixel_values_b, label_heading, label_norm_heading, json_path, label_range, label_norm_range
 
 
 json_num = []
@@ -119,25 +124,50 @@ best_success_rate = 0.0
 parser = argparse.ArgumentParser(description='')
 parser.add_argument('--seed', default=2021, type=int)
 parser.add_argument('--print_freq', default=10, type=int)
+parser.add_argument('--lr_lora', default=1e-4, type=float)
 parser.add_argument('--lr_regressor', default=1e-3, type=float)
-parser.add_argument('--momentum', default=0.9, type=float)
-parser.add_argument('--wd', default=1e-10, type=float, dest='weight_decay')
+parser.add_argument('--wd', default=1e-4, type=float, dest='weight_decay')
 parser.add_argument('--epochs', default=40, type=int)
 parser.add_argument('--warmup_epochs', default=1, type=int)
-parser.add_argument('--embedding_dir', type=str, required=True, help='Path to embedding directory')
+parser.add_argument('--batch_size', default=8, type=int)
+parser.add_argument('--lora_r', default=16, type=int, help='LoRA rank')
+parser.add_argument('--lora_alpha', default=32, type=int, help='LoRA alpha')
+parser.add_argument('--lora_dropout', default=0.05, type=float, help='LoRA dropout')
+parser.add_argument('--tours_dir', type=str, required=True, help='Path to tours image directory')
+parser.add_argument('--model_name', type=str, default='/root/dreamNav/models/dinov3_7b', help='Path to pretrained DINOv3 model')
 parser.add_argument('--train_dir', type=str, required=True, help='Path to training set JSON directory')
 parser.add_argument('--test_dir', type=str, required=True, help='Path to test set JSON directory')
 parser.add_argument('--output_file', type=str, default='test_results.log', help='Path to output file for test results')
 
 class OurModel(nn.Module):
-    def __init__(self, pretrained=True):
+    def __init__(self, model_name, lora_r=16, lora_alpha=32, lora_dropout=0.05):
         super(OurModel, self).__init__()
 
-        self.regressor = nn.Linear(8192, 3) 
+        backbone = AutoModel.from_pretrained(
+            model_name,
+            torch_dtype=torch.bfloat16,
+        )
+        backbone.gradient_checkpointing_enable()
 
-    def forward(self, images_a):
+        lora_config = LoraConfig(
+            r=lora_r,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            target_modules=["q_proj", "v_proj"],
+            bias="none",
+        )
+        self.backbone = get_peft_model(backbone, lora_config)
+        self.backbone.print_trainable_parameters()
+
+        hidden_size = backbone.config.hidden_size
+        self.regressor = nn.Linear(hidden_size * 2, 3) 
+
+    def forward(self, pixel_values_a, pixel_values_b):
         
-        output = self.regressor(images_a)
+        out_a = self.backbone(pixel_values=pixel_values_a).pooler_output
+        out_b = self.backbone(pixel_values=pixel_values_b).pooler_output
+        combined = torch.cat((out_a, out_b), dim=-1).float()
+        output = self.regressor(combined)
 
         return output 
 
@@ -149,14 +179,15 @@ def validate(test_loader, model, device):
     all_success = []
 
     with torch.no_grad():
-        for i, (image_a, label_heading, label_norm_heading, _, label_range, label_norm_range) in enumerate(tqdm(test_loader, desc='[Validate]')):
-            image_a = image_a.to(device, non_blocking=True)
+        for i, (pixel_values_a, pixel_values_b, label_heading, label_norm_heading, _, label_range, label_norm_range) in enumerate(tqdm(test_loader, desc='[Validate]')):
+            pixel_values_a = pixel_values_a.to(device, non_blocking=True)
+            pixel_values_b = pixel_values_b.to(device, non_blocking=True)
             label_heading = label_heading.to(device, non_blocking=True)
             label_norm_heading = label_norm_heading.to(device, non_blocking=True)
             label_range = label_range.to(device, non_blocking=True)
             label_norm_range = label_norm_range.to(device, non_blocking=True)
 
-            output = model(image_a)
+            output = model(pixel_values_a, pixel_values_b)
             pred_range = output[:,0] * (norm_range_max - norm_range_min) + norm_range_min
             pred_heading_vec = output[:,1:]
 
@@ -200,17 +231,18 @@ def train(train_loader, test_dataloader, model, criterion, optimizer, epoch, dev
     global min_heading_mae
     global best_success_rate
 
-    for i, (image_a, label_heading, label_norm_heading, _, label_range, label_norm_range) in enumerate(tqdm(train_loader, desc=f'Epoch {epoch} [Train]')):
+    for i, (pixel_values_a, pixel_values_b, label_heading, label_norm_heading, _, label_range, label_norm_range) in enumerate(tqdm(train_loader, desc=f'Epoch {epoch} [Train]')):
         
         model.train()
         
-        image_a = image_a.to(device, non_blocking=True)
+        pixel_values_a = pixel_values_a.to(device, non_blocking=True)
+        pixel_values_b = pixel_values_b.to(device, non_blocking=True)
         label_heading = label_heading.to(device, non_blocking=True)
         label_norm_heading = label_norm_heading.to(device, non_blocking=True)
         label_range = label_range.to(device, non_blocking=True)
         label_norm_range = label_norm_range.to(device, non_blocking=True)
 
-        output = model(image_a)
+        output = model(pixel_values_a, pixel_values_b)
         pred_range = output[:,0]
         pred_heading = output[:,1:]
 
@@ -260,20 +292,29 @@ def main():
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
-    model = OurModel()
+    processor = AutoImageProcessor.from_pretrained(args.model_name)
+
+    model = OurModel(
+        args.model_name,
+        lora_r=args.lora_r,
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
+    )
     model.to(device)
 
-    train_dataset = TourFrameDataset(args.train_dir, args.embedding_dir)
-    test_dataset = TourFrameDataset(args.test_dir, args.embedding_dir)
+    train_dataset = TourFrameDataset(args.train_dir, args.tours_dir, processor)
+    test_dataset = TourFrameDataset(args.test_dir, args.tours_dir, processor)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=False)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     criterion = None
 
-    optimizer = torch.optim.SGD([
+    lora_params = [p for p in model.backbone.parameters() if p.requires_grad]
+    optimizer = torch.optim.AdamW([
+        {'params': lora_params, 'lr': args.lr_lora},
         {'params': list(model.regressor.parameters()), 'lr': args.lr_regressor}
-    ], momentum=args.momentum, weight_decay=args.weight_decay)
+    ], weight_decay=args.weight_decay)
 
     scheduler = get_scheduler(
         optimizer=optimizer,
