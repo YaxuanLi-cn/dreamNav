@@ -25,7 +25,7 @@ run_task() {
     tour_id=$2
     now_dataset=${OUTPUT_DIR}${tour_id}
     mkdir -p $now_dataset
-    CUDA_VISIBLE_DEVICES=$gpu_id python match_pairs.py --input_dir ${DATASET_DIR}${tour_id}/ --input_pairs /root/dreamNav/step1/SuperGlue/pairs.txt --output_dir $now_dataset
+    CUDA_VISIBLE_DEVICES=$gpu_id python match_pairs.py --superglue outdoor --input_dir ${DATASET_DIR}${tour_id}/ --input_pairs /root/dreamNav/step1/SuperGlue/pairs.txt --output_dir $now_dataset
 }
 
 export -f run_task
