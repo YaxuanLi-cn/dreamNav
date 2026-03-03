@@ -2,9 +2,7 @@
 name = "openpi"
 version = "0.1.0"
 description = "Physical Intelligence open source repo"
-readme = "README.md"
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
 dependencies = [
     "augmax>=0.3.4",
     "dm-tree>=0.1.8",
