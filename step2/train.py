@@ -49,6 +49,10 @@ def parse_args():
     parser.add_argument('--output_dir', type=str, required=True,
                         help='Root directory for training outputs (checkpoints, logs)')
 
+    # ==================== Image Size Config ====================
+    parser.add_argument('--size_mult', type=int, default=1,
+                        help='Image size multiplier (1=64x64, 2=128x128, 3=192x192, ...)')
+
     return parser.parse_args()
 
 
@@ -66,7 +70,7 @@ def main():
 
 
     # Misc
-    dataset = MyDataset(root_dir=args.root_dir, dataset_type=args.dataset_type)
+    dataset = MyDataset(root_dir=args.root_dir, dataset_type=args.dataset_type, size_mult=args.size_mult)
     dataloader = DataLoader(dataset, num_workers=0, batch_size=args.batch_size, shuffle=True)
 
     # 每12200保存+测试一次
@@ -80,7 +84,8 @@ def main():
         ddim_steps=args.test_ddim_steps,
         max_test_samples=max_test_samples,
         save_dir=args.test_save_dir,
-        test_batch_size=args.test_batch_size
+        test_batch_size=args.test_batch_size,
+        size_mult=args.size_mult
     )
 
     trainer = pl.Trainer(

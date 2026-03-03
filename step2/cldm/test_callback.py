@@ -9,10 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from ldm.models.diffusion.ddim import DDIMSampler
 
-# Target output size (what user wants)
-TARGET_SIZE = 64
-# Processing size (must be divisible by 64 for UNet compatibility: 64/8=8 latent)
-PROCESS_SIZE = 64
+BASE_SIZE = 64  # Base unit size (must be divisible by 64 for UNet compatibility)
 
 
 def pad_to_size(img, target_size, pad_value=0):
@@ -48,9 +45,10 @@ def angular_difference(angle1, angle2):
 class TestDatasetWithPrediction(Dataset):
     """Test dataset that loads predictions from step1_seen.json"""
     
-    def __init__(self, step1_json_path, data_root='/root/autodl-tmp/dreamnav/try_test/'):
+    def __init__(self, step1_json_path, data_root='/root/autodl-tmp/dreamnav/try_test/', size_mult=1):
         self.data = []
         self.data_root = data_root
+        self.image_size = BASE_SIZE * size_mult
         
         # Load step1 predictions
         with open(step1_json_path, 'r') as f:
@@ -88,16 +86,12 @@ class TestDatasetWithPrediction(Dataset):
         source = cv2.imread(item['image_a'])
         target = cv2.imread(item['image_b'])
         
-        # Resize images to TARGET_SIZE x TARGET_SIZE first
-        source = cv2.resize(source, (TARGET_SIZE, TARGET_SIZE), interpolation=cv2.INTER_AREA)
-        target = cv2.resize(target, (TARGET_SIZE, TARGET_SIZE), interpolation=cv2.INTER_AREA)
+        # Resize images to image_size x image_size (size_mult * 64)
+        source = cv2.resize(source, (self.image_size, self.image_size), interpolation=cv2.INTER_AREA)
+        target = cv2.resize(target, (self.image_size, self.image_size), interpolation=cv2.INTER_AREA)
         
         source = cv2.cvtColor(source, cv2.COLOR_BGR2RGB)
         target = cv2.cvtColor(target, cv2.COLOR_BGR2RGB)
-        
-        # Pad to PROCESS_SIZE for UNet compatibility (centered)
-        source = pad_to_size(source, PROCESS_SIZE, pad_value=0)
-        target = pad_to_size(target, PROCESS_SIZE, pad_value=0)
         
         source = source.astype(np.float32) / 255.0
         target = (target.astype(np.float32) / 127.5) - 1.0
@@ -124,7 +118,8 @@ class EpochTestCallback(Callback):
                  batch_size=1,
                  max_test_samples=None,
                  save_dir=None,
-                 test_batch_size=3):
+                 test_batch_size=3,
+                 size_mult=1):
         """
         Args:
             step1_json_path: Path to step1_seen.json with predictions
@@ -148,12 +143,14 @@ class EpochTestCallback(Callback):
         self.test_dataset = None
         self.test_batch_size = test_batch_size
         self.num_offsets = 9  # 3 heading × 3 range
+        self.size_mult = size_mult
+        self.image_size = BASE_SIZE * size_mult
         
     def setup(self, trainer, pl_module, stage=None):
         """Load test dataset once"""
         if self.test_dataset is None:
             print(f"Loading test dataset from {self.step1_json_path}...")
-            self.test_dataset = TestDatasetWithPrediction(self.step1_json_path, self.data_root)
+            self.test_dataset = TestDatasetWithPrediction(self.step1_json_path, self.data_root, size_mult=self.size_mult)
             print(f"Test dataset loaded with {len(self.test_dataset)} samples")
     
     @rank_zero_only
@@ -267,8 +264,8 @@ class EpochTestCallback(Callback):
                 generated = pl_module.decode_first_stage(samples)  # (total_bs, C, H, W)
                 
                 # Center crop for fair comparison
-                generated_cropped = center_crop_tensor(generated, TARGET_SIZE)
-                targets_cropped = center_crop_tensor(targets_batch, TARGET_SIZE)
+                generated_cropped = center_crop_tensor(generated, self.image_size)
+                targets_cropped = center_crop_tensor(targets_batch, self.image_size)
                 
                 # Compute per-item MSE: (total_bs,)
                 mse_per_item = torch.mean((generated_cropped - targets_cropped) ** 2, dim=(1, 2, 3))

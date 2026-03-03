@@ -7,7 +7,7 @@ python train.py \
     --step1_json_path ../step1/step1_seen.json \
     --test_save_dir ./outputs/test_results/ \
     --output_dir ./outputs/ \
-    --batch_size 512 \
+    --batch_size 128 \
     --test_batch_size 64 \
     --logger_freq 300 \
     --learning_rate 1e-5 \
@@ -17,4 +17,5 @@ python train.py \
     --max_test_samples 6000 \
     --range_offset 1.5 \
     --heading_offset 10.0 \
+    --size_mult 2 \
     --max_epochs 5 

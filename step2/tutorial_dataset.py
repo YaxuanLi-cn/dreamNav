@@ -5,10 +5,7 @@ import os
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-# Target output size (what user wants)
-TARGET_SIZE = 64
-# Processing size (must be divisible by 64 for UNet compatibility: 64/8=8 latent)
-PROCESS_SIZE = 64
+BASE_SIZE = 64  # Base unit size (must be divisible by 64 for UNet compatibility)
 
 
 def pad_to_size(img, target_size, pad_value=0):
@@ -26,8 +23,9 @@ def pad_to_size(img, target_size, pad_value=0):
 
 
 class MyDataset(Dataset):
-    def __init__(self, root_dir='/root/autodl-tmp/dreamnav/', dataset_type='try_train'):
+    def __init__(self, root_dir='/root/autodl-tmp/dreamnav/', dataset_type='try_train', size_mult=1):
         self.data = []
+        self.image_size = BASE_SIZE * size_mult
         self.root = os.path.join(root_dir, dataset_type) + '/'
         for building_id in tqdm(os.listdir(self.root)):
             now_dir_path = self.root + building_id + '/'
@@ -54,17 +52,13 @@ class MyDataset(Dataset):
         source = cv2.imread(source_filename)
         target = cv2.imread(target_filename)
 
-        # Resize images to TARGET_SIZE x TARGET_SIZE first
-        source = cv2.resize(source, (TARGET_SIZE, TARGET_SIZE), interpolation=cv2.INTER_AREA)
-        target = cv2.resize(target, (TARGET_SIZE, TARGET_SIZE), interpolation=cv2.INTER_AREA)
+        # Resize images to image_size x image_size (size_mult * 64)
+        source = cv2.resize(source, (self.image_size, self.image_size), interpolation=cv2.INTER_AREA)
+        target = cv2.resize(target, (self.image_size, self.image_size), interpolation=cv2.INTER_AREA)
 
         # Do not forget that OpenCV read images in BGR order.
         source = cv2.cvtColor(source, cv2.COLOR_BGR2RGB)
         target = cv2.cvtColor(target, cv2.COLOR_BGR2RGB)
-
-        # Pad to PROCESS_SIZE for UNet compatibility (centered)
-        source = pad_to_size(source, PROCESS_SIZE, pad_value=0)
-        target = pad_to_size(target, PROCESS_SIZE, pad_value=0)
 
         # Normalize source images to [0, 1].
         source = source.astype(np.float32) / 255.0
