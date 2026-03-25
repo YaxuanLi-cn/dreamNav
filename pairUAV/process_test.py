@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Copy images from origin_test_tour/{tour_id}/{image_id}.jpeg
-to test_tour/{random_id}.jpeg with randomly generated unique IDs.
+to test_tour/{random_id}.webp (converted to WebP) with randomly generated unique IDs.
 
 - Each file gets a random alphanumeric ID (letters + digits).
 - The mapping (random_id -> original relative path) is saved to a JSON file.
@@ -10,9 +10,11 @@ to test_tour/{random_id}.jpeg with randomly generated unique IDs.
 
 import json
 import secrets
-import shutil
 import string
 from pathlib import Path
+
+from PIL import Image
+from tqdm import tqdm
 
 SRC_DIR = Path("/root/dreamNav/pairUAV/origin_test_tour")
 DST_DIR = Path("/root/dreamNav/pairUAV/test_tour")
@@ -38,18 +40,16 @@ def main():
     mapping = {}      # original relative path -> random_id
     used_ids = set()
 
-    for i, src_path in enumerate(jpeg_files):
+    for src_path in tqdm(jpeg_files, desc="Converting", unit="img"):
         rel_path = str(src_path.relative_to(SRC_DIR))  # e.g. "0777/image-50.jpeg"
 
         rid = generate_id(ID_LEN, used_ids)
         used_ids.add(rid)
         mapping[rel_path] = rid
 
-        dst_path = DST_DIR / f"{rid}.jpeg"
-        shutil.copy2(src_path, dst_path)
-
-        if (i + 1) % 5000 == 0 or (i + 1) == len(jpeg_files):
-            print(f"  Processed {i + 1}/{len(jpeg_files)} ...")
+        dst_path = DST_DIR / f"{rid}.webp"
+        with Image.open(src_path) as img:
+            img.save(dst_path, format="WEBP", quality=80)
 
     # Save mapping
     output = {
